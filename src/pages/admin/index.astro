@@ -1,0 +1,172 @@
+---
+import { getAllConfigs } from '../../utils/db';
+
+// 定义配置项接口
+interface ConfigItem {
+  key: string;
+  value: string;
+}
+
+// 检查是否已认证
+const isAuthenticated = Astro.cookies.has('admin_auth') && Astro.cookies.get('admin_auth')?.value === 'authenticated';
+
+// 如果未认证，重定向到登录页
+if (!isAuthenticated && Astro.request.method !== 'POST') {
+  return Astro.redirect('/admin/login');
+}
+
+// 获取配置
+const env = Astro.locals.runtime.env;
+let configs: ConfigItem[] = [];
+let siteTitle = '网站管理系统';
+
+if (env.DB) {
+  configs = await getAllConfigs(env.DB);
+  // 创建配置Map以便于访问
+  const configMap: Record<string, string> = {};
+  configs.forEach(config => {
+    configMap[config.key] = config.value;
+  });
+  // 获取网站标题
+  siteTitle = configMap['title'] || '网站管理系统';
+}
+
+// 处理POST请求 - 更新配置
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const action = formData.get('action');
+  
+  // 处理登录
+  if (action === 'login') {
+    const username = formData.get('username');
+    const password = formData.get('password');
+    
+    // 简单验证 - 在生产环境应使用环境变量或数据库存储凭据
+    if (username === 'admin' && password === 'password') {
+      Astro.cookies.set('admin_auth', 'authenticated', {
+        httpOnly: true,
+        secure: true,
+        path: '/',
+        maxAge: 60 * 60 * 24 // 1天
+      });
+      return Astro.redirect('/admin');
+    } else {
+      return Astro.redirect('/admin/login?error=1');
+    }
+  }
+  
+  // 处理登出
+  if (action === 'logout') {
+    Astro.cookies.delete('admin_auth', {
+      path: '/',
+    });
+    return Astro.redirect('/admin/login');
+  }
+}
+---
+
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>后台管理 - {siteTitle}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      background-color: #01C4B6;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .nav {
+      display: flex;
+      gap: 20px;
+    }
+    .nav a {
+      color: white;
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+    .nav a:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+    .card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+      color: #01C4B6;
+    }
+    .logout {
+      background-color: transparent;
+      border: 1px solid white;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .logout:hover {
+      background-color: white;
+      color: #01C4B6;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>{siteTitle} - 后台管理</h1>
+    <div class="nav">
+      <a href="/admin">仪表盘</a>
+      <a href="/admin/config">网站配置</a>
+      <a href="/admin/links">友情链接</a>
+      <a href="/admin/talking">说说管理</a>
+      <a href="/admin/friends">朋友圈</a>
+      <form method="post" style="margin: 0;">
+        <input type="hidden" name="action" value="logout">
+        <button type="submit" class="logout">退出登录</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>欢迎使用后台管理</h2>
+      <p>选择上方菜单以管理您的网站内容和配置。</p>
+    </div>
+
+    <div class="card">
+      <h2>网站状态</h2>
+      <ul>
+        <li>配置项数量: {configs.length}</li>
+        <li>数据库连接: {env.DB ? '正常' : '未连接'}</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html> 

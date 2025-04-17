@@ -1,0 +1,335 @@
+---
+import { getAllConfigs, updateConfig } from "../../utils/db";
+
+// 定义配置项接口
+interface ConfigItem {
+  key: string;
+  value: string;
+}
+
+// 检查是否已认证
+const isAuthenticated = Astro.cookies.has('admin_auth') && Astro.cookies.get('admin_auth')?.value === 'authenticated';
+
+// 如果未认证，重定向到登录页
+if (!isAuthenticated) {
+  return Astro.redirect('/admin/login');
+}
+
+// 获取数据库实例
+const db = Astro.locals.runtime.env.DB;
+
+// 处理表单提交
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const entries = formData.entries();
+    let entry;
+    
+    // 更新每个配置项
+    while (!(entry = entries.next()).done) {
+      const [key, value] = entry.value;
+      if (key.startsWith('config_')) {
+        const configKey = key.replace('config_', '');
+        await updateConfig(db, configKey, value.toString());
+      }
+    }
+    
+    // 重定向回配置页
+    return Astro.redirect('/admin/config?success=1');
+  } catch (error) {
+    console.error('更新配置失败:', error);
+  }
+}
+
+// 获取所有配置
+const configs: ConfigItem[] = await getAllConfigs(db);
+
+// 创建一个配置Map以便于访问
+const configMap: Record<string, string> = {};
+configs.forEach(config => {
+  configMap[config.key] = config.value;
+});
+
+// 检查是否操作成功
+const success = Astro.url.searchParams.get('success') === '1';
+---
+
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网站配置 - 管理后台</title>
+  <style>
+    :root {
+      --primary-color: #01C4B6;
+      --primary-hover: #00a89c;
+      --background-color: #f8f9fa;
+      --card-bg: #ffffff;
+      --text-color: #333;
+      --border-color: #ddd;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+      background-color: var(--background-color);
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+    
+    .header h1 {
+      color: var(--primary-color);
+      margin: 0;
+    }
+    
+    .nav {
+      margin-bottom: 20px;
+      background-color: var(--card-bg);
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 10px 20px;
+    }
+    
+    .nav-list {
+      display: flex;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .nav-item {
+      margin-right: 20px;
+    }
+    
+    .nav-link {
+      color: var(--text-color);
+      text-decoration: none;
+      padding: 8px 0;
+      display: block;
+      transition: color 0.3s;
+    }
+    
+    .nav-link:hover, .nav-link.active {
+      color: var(--primary-color);
+    }
+    
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    
+    .card-header {
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border-color);
+      background-color: #f7f7f7;
+    }
+    
+    .card-title {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+    
+    .card-body {
+      padding: 20px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    
+    .form-control {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 1rem;
+      transition: border-color 0.3s;
+      box-sizing: border-box;
+    }
+    
+    .form-control:focus {
+      border-color: var(--primary-color);
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(1, 196, 182, 0.2);
+    }
+    
+    .btn {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 15px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    .btn:hover {
+      background-color: var(--primary-hover);
+    }
+    
+    .alert {
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    .alert-success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    textarea.form-control {
+      min-height: 100px;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>网站管理后台</h1>
+    </div>
+    
+    <nav class="nav">
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a href="/admin" class="nav-link">首页</a>
+        </li>
+        <li class="nav-item">
+          <a href="/admin/posts" class="nav-link">文章管理</a>
+        </li>
+        <li class="nav-item">
+          <a href="/admin/config" class="nav-link active">网站配置</a>
+        </li>
+        <li class="nav-item">
+          <a href="/admin/logout" class="nav-link">退出登录</a>
+        </li>
+      </ul>
+    </nav>
+    
+    {success && (
+      <div class="alert alert-success">
+        配置更新成功！
+      </div>
+    )}
+    
+    <form method="post">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">基本配置</h2>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="site_title">网站标题</label>
+            <input 
+              type="text" 
+              id="site_title" 
+              name="config_title" 
+              class="form-control" 
+              value={configMap['title'] || ''}
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="site_subtitle">网站副标题</label>
+            <input 
+              type="text" 
+              id="site_subtitle" 
+              name="config_subtitle" 
+              class="form-control" 
+              value={configMap['subtitle'] || ''}
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="site_url">网站地址</label>
+            <input 
+              type="url" 
+              id="site_url" 
+              name="config_site" 
+              class="form-control" 
+              value={configMap['site'] || ''}
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="site_description">网站描述</label>
+            <textarea 
+              id="site_description" 
+              name="config_description" 
+              class="form-control"
+            >{configMap['description'] || ''}</textarea>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">作者信息</h2>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="author_name">作者名称</label>
+            <input 
+              type="text" 
+              id="author_name" 
+              name="config_author" 
+              class="form-control" 
+              value={configMap['author'] || ''}
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="author_avatar">头像地址</label>
+            <input 
+              type="url" 
+              id="author_avatar" 
+              name="config_avatar" 
+              class="form-control" 
+              value={configMap['avatar'] || ''}
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="author_motto">个人签名</label>
+            <input 
+              type="text" 
+              id="author_motto" 
+              name="config_motto" 
+              class="form-control" 
+              value={configMap['motto'] || ''}
+            />
+          </div>
+        </div>
+      </div>
+      
+      <button type="submit" class="btn">保存配置</button>
+    </form>
+  </div>
+</body>
+</html> 

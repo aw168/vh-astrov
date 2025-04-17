@@ -1,0 +1,458 @@
+---
+import { getLinks, addLink, updateLink, deleteLink } from '../../utils/db';
+
+// 检查是否已认证
+const isAuthenticated = Astro.cookies.has('admin_auth') && Astro.cookies.get('admin_auth')?.value === 'authenticated';
+
+// 如果未认证，重定向到登录页
+if (!isAuthenticated) {
+  return Astro.redirect('/admin/login');
+}
+
+// 获取环境变量
+const env = Astro.locals.runtime.env;
+let links = [];
+let message = '';
+let isSuccess = false;
+
+if (env.DB) {
+  links = await getLinks(env.DB);
+}
+
+// 处理表单提交
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const action = formData.get('action');
+    
+    if (action === 'add') {
+      // 添加新链接
+      const link = {
+        name: formData.get('name').toString(),
+        link: formData.get('link').toString(),
+        avatar: formData.get('avatar').toString(),
+        descr: formData.get('descr').toString()
+      };
+      
+      await addLink(env.DB, link);
+      message = '友情链接添加成功！';
+      isSuccess = true;
+    } else if (action === 'update') {
+      // 更新链接
+      const id = parseInt(formData.get('id').toString());
+      const link = {
+        name: formData.get('name').toString(),
+        link: formData.get('link').toString(),
+        avatar: formData.get('avatar').toString(),
+        descr: formData.get('descr').toString()
+      };
+      
+      await updateLink(env.DB, id, link);
+      message = '友情链接更新成功！';
+      isSuccess = true;
+    } else if (action === 'delete') {
+      // 删除链接
+      const id = parseInt(formData.get('id').toString());
+      await deleteLink(env.DB, id);
+      message = '友情链接删除成功！';
+      isSuccess = true;
+    }
+    
+    // 重新获取链接列表
+    links = await getLinks(env.DB);
+  } catch (error) {
+    message = `操作失败: ${error.message}`;
+    isSuccess = false;
+  }
+}
+---
+
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>友情链接管理 - 韩小韩博客后台管理</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      background-color: #01C4B6;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .nav {
+      display: flex;
+      gap: 20px;
+    }
+    .nav a {
+      color: white;
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+    .nav a:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+    .card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+      color: #01C4B6;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    .form-control {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      transition: border-color 0.3s;
+    }
+    .form-control:focus {
+      border-color: #01C4B6;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(1, 196, 182, 0.2);
+    }
+    .btn {
+      background-color: #01C4B6;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      display: inline-block;
+      margin-right: 10px;
+    }
+    .btn:hover {
+      background-color: #00a89c;
+    }
+    .btn-danger {
+      background-color: #dc3545;
+    }
+    .btn-danger:hover {
+      background-color: #c82333;
+    }
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 0.9rem;
+    }
+    .logout {
+      background-color: transparent;
+      border: 1px solid white;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .logout:hover {
+      background-color: white;
+      color: #01C4B6;
+    }
+    .alert {
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .alert-success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .alert-danger {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background-color: #f8f9fa;
+      font-weight: 600;
+    }
+    .link-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .link-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      width: 100%;
+      max-width: 500px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    .modal-header h3 {
+      margin: 0;
+      color: #01C4B6;
+    }
+    .close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #aaa;
+    }
+    .close:hover {
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>韩小韩博客 - 后台管理</h1>
+    <div class="nav">
+      <a href="/admin">仪表盘</a>
+      <a href="/admin/config">网站配置</a>
+      <a href="/admin/links">友情链接</a>
+      <a href="/admin/talking">说说管理</a>
+      <a href="/admin/friends">朋友圈</a>
+      <form method="post" action="/admin" style="margin: 0;">
+        <input type="hidden" name="action" value="logout">
+        <button type="submit" class="logout">退出登录</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>友情链接管理</h2>
+      
+      {message && (
+        <div class={`alert ${isSuccess ? 'alert-success' : 'alert-danger'}`}>
+          {message}
+        </div>
+      )}
+      
+      <button id="showAddModal" class="btn">添加新链接</button>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>站点信息</th>
+            <th>链接</th>
+            <th>描述</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {links.map(link => (
+            <tr>
+              <td>
+                <div class="link-item">
+                  <img src={link.avatar} alt={link.name} class="link-avatar">
+                  <span>{link.name}</span>
+                </div>
+              </td>
+              <td><a href={link.link} target="_blank">{link.link}</a></td>
+              <td>{link.descr}</td>
+              <td class="actions">
+                <button class="btn btn-sm edit-btn" data-id={link.id} data-name={link.name} data-link={link.link} data-avatar={link.avatar} data-descr={link.descr}>编辑</button>
+                <form method="post" style="margin: 0;" onsubmit="return confirm('确定要删除这个链接吗？');">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="id" value={link.id}>
+                  <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                </form>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <!-- 添加链接模态框 -->
+  <div id="addModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加友情链接</h3>
+        <button class="close">&times;</button>
+      </div>
+      <form method="post">
+        <input type="hidden" name="action" value="add">
+        
+        <div class="form-group">
+          <label for="name">网站名称</label>
+          <input type="text" id="name" name="name" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="link">网站链接</label>
+          <input type="url" id="link" name="link" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="avatar">网站图标</label>
+          <input type="url" id="avatar" name="avatar" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="descr">网站描述</label>
+          <input type="text" id="descr" name="descr" class="form-control" required>
+        </div>
+        
+        <button type="submit" class="btn">添加链接</button>
+      </form>
+    </div>
+  </div>
+  
+  <!-- 编辑链接模态框 -->
+  <div id="editModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>编辑友情链接</h3>
+        <button class="close">&times;</button>
+      </div>
+      <form method="post">
+        <input type="hidden" name="action" value="update">
+        <input type="hidden" id="edit-id" name="id">
+        
+        <div class="form-group">
+          <label for="edit-name">网站名称</label>
+          <input type="text" id="edit-name" name="name" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-link">网站链接</label>
+          <input type="url" id="edit-link" name="link" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-avatar">网站图标</label>
+          <input type="url" id="edit-avatar" name="avatar" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-descr">网站描述</label>
+          <input type="text" id="edit-descr" name="descr" class="form-control" required>
+        </div>
+        
+        <button type="submit" class="btn">保存修改</button>
+      </form>
+    </div>
+  </div>
+  
+  <script>
+    // 模态框操作
+    const addModal = document.getElementById('addModal');
+    const editModal = document.getElementById('editModal');
+    const showAddModalBtn = document.getElementById('showAddModal');
+    const closeButtons = document.querySelectorAll('.close');
+    
+    // 显示添加模态框
+    showAddModalBtn.addEventListener('click', () => {
+      addModal.style.display = 'flex';
+    });
+    
+    // 关闭模态框
+    closeButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        addModal.style.display = 'none';
+        editModal.style.display = 'none';
+      });
+    });
+    
+    // 点击模态框外部关闭
+    window.addEventListener('click', event => {
+      if (event.target === addModal) {
+        addModal.style.display = 'none';
+      }
+      if (event.target === editModal) {
+        editModal.style.display = 'none';
+      }
+    });
+    
+    // 编辑按钮点击事件
+    document.querySelectorAll('.edit-btn').forEach(button => {
+      button.addEventListener('click', () => {
+        const id = button.getAttribute('data-id');
+        const name = button.getAttribute('data-name');
+        const link = button.getAttribute('data-link');
+        const avatar = button.getAttribute('data-avatar');
+        const descr = button.getAttribute('data-descr');
+        
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-name').value = name;
+        document.getElementById('edit-link').value = link;
+        document.getElementById('edit-avatar').value = avatar;
+        document.getElementById('edit-descr').value = descr;
+        
+        editModal.style.display = 'flex';
+      });
+    });
+  </script>
+</body>
+</html> 
